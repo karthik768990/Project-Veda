@@ -18,19 +18,6 @@ GEMINI_API_URL = os.getenv("GEMINI_API_URL", "https://api.yourgeneration.endpoin
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "paste-your-key-here")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview") 
 
-
-# TODO Remove this and this are only for the test 
-    
-if not GEMINI_API_KEY: 
-    print("Gemini_api_key not found " )
-
-if not GEMINI_API_URL:
-    print("GEMINI_URL_ nt found ")
-
-if not GEMINI_MODEL:
-        print("Gemini model not found")    
-
-
 #TODO redesign it to the env setup
 
 DEFAULT_MAX_ATTEMPTS = 5

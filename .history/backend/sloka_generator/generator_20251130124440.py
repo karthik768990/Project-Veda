@@ -20,16 +20,6 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview")
 
 
 # TODO Remove this and this are only for the test 
-    
-if not GEMINI_API_KEY: 
-    print("Gemini_api_key not found " )
-
-if not GEMINI_API_URL:
-    print("GEMINI_URL_ nt found ")
-
-if not GEMINI_MODEL:
-        print("Gemini model not found")    
-
 
 #TODO redesign it to the env setup
 

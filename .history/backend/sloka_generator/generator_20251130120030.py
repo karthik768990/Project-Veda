@@ -4,32 +4,15 @@ import re
 import httpx
 import asyncio
 from typing import Optional, Dict, Any
-from dotenv import load_dotenv
-# ← updated imports based on your folder structure
-from chandas_analyser.syllabifier import get_lg_pattern, to_iast, to_devanagari
-from chandas_analyser.matcher import find_match_in_db
-from chandas_analyser.local_loader import get_chandas_cached
-from chandas_analyser.config import SIMILARITY_THRESHOLD
-
-load_dotenv() 
+from .syllabifier import get_lg_pattern, to_iast, to_devanagari
+from .matcher import find_match_in_db
+from .local_loader import get_chandas_cached
+from .config import SIMILARITY_THRESHOLD
 
 # Config placeholders — set via env
 GEMINI_API_URL = os.getenv("GEMINI_API_URL", "https://api.yourgeneration.endpoint/v1/generate")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "paste-your-key-here")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview") 
-
-
-# TODO Remove this and this are only for the test 
-    
-if not GEMINI_API_KEY: 
-    print("Gemini_api_key not found " )
-
-if not GEMINI_API_URL:
-    print("GEMINI_URL_ nt found ")
-
-if not GEMINI_MODEL:
-        print("Gemini model not found")    
-
 
 #TODO redesign it to the env setup
 
@@ -63,53 +46,36 @@ Please include a single-line 'syllable_pattern' (LG pattern per pada separated b
     return prompt
 
 async def call_gemini(prompt: str) -> str:
-    if not GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not set. Please add it to .env and restart.")
-        
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-
+    # Generic HTTP wrapper: adapt per actual Gemini API contract.
+    headers = {"Authorization": f"Bearer {GEMINI_API_KEY}", "Content-Type":"application/json"}
     body = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ]
+        "model": GEMINI_MODEL,
+        "prompt": prompt,
+        "max_output_tokens": 512,
+        # you may add temperature, top_p, etc here
     }
 
-    headers = {"Content-Type": "application/json"}
-
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-
-            # Extract text from Gemini response
-            text = None
-
-            if "candidates" in data and isinstance(data["candidates"], list):
-                candidate = data["candidates"][0]
-                text = candidate.get("content") or candidate.get("text") or None
-
-            if not text:
-                text = data.get("text") or data.get("output", {}).get("text")
-
-            if not text:
-                return str(data)
-
-            return text
-
-    except httpx.HTTPStatusError as e:
-        raise RuntimeError(f"Gemini API returned HTTP {e.response.status_code}: {e.response.text}") from e
-    except httpx.RequestError as e:
-        raise RuntimeError(f"Network error contacting Gemini: {e}") from e
-
-
-
-
-
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        resp = await client.post(GEMINI_API_URL, json=body, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        # The exact JSON shape depends on provider. Try common keys then fallback.
+        text = None
+        # example: data.get("output", {}).get("text")
+        if isinstance(data, dict):
+            if "output" in data and isinstance(data["output"], dict):
+                text = data["output"].get("text")
+            elif "candidates" in data:
+                # some APIS put text in candidates[0].content etc.
+                candidates = data.get("candidates")
+                if candidates and isinstance(candidates, list):
+                    text = candidates[0].get("content") or candidates[0].get("text")
+            else:
+                # fallback to raw json->string
+                text = data.get("text") or data.get("response") or str(data)
+        if text is None:
+            text = str(data)
+        return text
 
 def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
     # parse BEGIN/END blocks

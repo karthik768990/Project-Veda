@@ -4,7 +4,7 @@ import re
 import httpx
 import asyncio
 from typing import Optional, Dict, Any
-from dotenv import load_dotenv
+
 # ← updated imports based on your folder structure
 from chandas_analyser.syllabifier import get_lg_pattern, to_iast, to_devanagari
 from chandas_analyser.matcher import find_match_in_db
@@ -17,19 +17,6 @@ load_dotenv()
 GEMINI_API_URL = os.getenv("GEMINI_API_URL", "https://api.yourgeneration.endpoint/v1/generate")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "paste-your-key-here")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview") 
-
-
-# TODO Remove this and this are only for the test 
-    
-if not GEMINI_API_KEY: 
-    print("Gemini_api_key not found " )
-
-if not GEMINI_API_URL:
-    print("GEMINI_URL_ nt found ")
-
-if not GEMINI_MODEL:
-        print("Gemini model not found")    
-
 
 #TODO redesign it to the env setup
 
@@ -62,11 +49,17 @@ Please include a single-line 'syllable_pattern' (LG pattern per pada separated b
 """
     return prompt
 
+
 async def call_gemini(prompt: str) -> str:
     if not GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not set. Please add it to .env and restart.")
-        
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+        raise RuntimeError("GEMINI_API_KEY is not set. Set GEMINI_API_KEY in your environment or .env and restart the server.")
+    if not GEMINI_MODEL:
+        raise RuntimeError("GEMINI_MODEL is not set. Set GEMINI_MODEL in your environment or .env and restart the server.")
+
+    # Compose the full URL for the model generate endpoint
+    # e.g. https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=API_KEY
+    model_endpoint = f"{GEMINI_API_BASE.rstrip('/')}/{GEMINI_MODEL}:generateContent"
+    url = f"{model_endpoint}?key={GEMINI_API_KEY}"
 
     body = {
         "contents": [
@@ -86,31 +79,33 @@ async def call_gemini(prompt: str) -> str:
             resp.raise_for_status()
             data = resp.json()
 
-            # Extract text from Gemini response
+            # Extract text from known response shapes
+            # Google responses sometimes have `candidates` or `output.text` - try multiple
             text = None
-
-            if "candidates" in data and isinstance(data["candidates"], list):
-                candidate = data["candidates"][0]
-                text = candidate.get("content") or candidate.get("text") or None
-
-            if not text:
-                text = data.get("text") or data.get("output", {}).get("text")
-
-            if not text:
+            if isinstance(data, dict):
+                # common: data["candidates"][0]["content"]
+                candidates = data.get("candidates") or data.get("outputs") or data.get("output", {}).get("candidates")
+                if candidates and isinstance(candidates, list) and len(candidates) > 0:
+                    first = candidates[0]
+                    # candidate may have 'content' or 'output' or 'text'
+                    text = first.get("content") or first.get("output") or first.get("text")
+                # fallbacks
+                if not text:
+                    text = data.get("output", {}).get("text") or data.get("text") or data.get("response")
+            if text is None:
+                # last resort: stringify entire response
                 return str(data)
-
             return text
 
     except httpx.HTTPStatusError as e:
-        raise RuntimeError(f"Gemini API returned HTTP {e.response.status_code}: {e.response.text}") from e
+        # show useful details
+        try:
+            body_text = e.response.text
+        except Exception:
+            body_text = "<no body>"
+        raise RuntimeError(f"Gemini API error {e.response.status_code}: {body_text}") from e
     except httpx.RequestError as e:
         raise RuntimeError(f"Network error contacting Gemini: {e}") from e
-
-
-
-
-
-
 def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
     # parse BEGIN/END blocks
     shloka = ""
