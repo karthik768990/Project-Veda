@@ -85,26 +85,52 @@ explanation: <one-line justification>
 
 # Robust extraction with Devanagari fallback
 DEVANAGARI_RE = re.compile(r"[\u0900-\u097F\s।॥,०-९\-]+", re.U)
+# inside sloka_generator/generator.py (replace existing function)
 
 def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
+    """
+    Extracts the shloka and meta from the model output.
+    Handles cases where the model returned a JSON-like wrapper (e.g. {"parts":[{"text":"..."}]})
+    """
+    txt = generated_text
+
+    # if it's a JSON string containing 'parts' or 'candidates', extract the inner text
+    try:
+        if isinstance(generated_text, str):
+            st = generated_text.strip()
+            if st.startswith("{") or st.startswith("["):
+                parsed = json.loads(st)
+                # common wrapper: {"parts":[{"text":"..."}], "role":"model"}
+                if isinstance(parsed, dict):
+                    if "parts" in parsed and isinstance(parsed["parts"], list) and len(parsed["parts"]) > 0:
+                        first = parsed["parts"][0]
+                        if isinstance(first, dict) and "text" in first:
+                            txt = first["text"]
+                    # alternative location
+                    if txt == parsed and "candidates" in parsed and parsed["candidates"]:
+                        c0 = parsed["candidates"][0]
+                        txt = c0.get("content") or c0.get("text") or txt
+    except Exception:
+        # If JSON parse fails, just use original generated_text
+        txt = generated_text
+
     shloka = ""
     meta = ""
 
-    m = re.search(r"---BEGIN_SHLOKA---(.*?)---END_SHLOKA---", generated_text, re.S)
+    m = re.search(r"---BEGIN_SHLOKA---(.*?)---END_SHLOKA---", txt, re.S)
     if m:
         shloka = m.group(1).strip()
     else:
         # fallback: largest Devanagari block
-        blocks = DEVANAGARI_RE.findall(generated_text)
+        blocks = DEVANAGARI_RE.findall(txt)
         blocks = [b.strip() for b in blocks if len(b.strip()) > 8]
         if blocks:
             shloka = max(blocks, key=len)
         else:
-            # final fallback: take first 4 lines that look like a verse
-            lines = [ln.strip() for ln in generated_text.splitlines() if ln.strip()]
+            lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
             shloka = "\n".join(lines[:4])
 
-    m2 = re.search(r"---META---(.*?)---END_META---", generated_text, re.S)
+    m2 = re.search(r"---META---(.*?)---END_META---", txt, re.S)
     if m2:
         meta = m2.group(1).strip()
 
@@ -225,15 +251,40 @@ async def generate_and_verify(chandas_name: str, context: str, language: str="de
             "lg_patterns": lg_patterns,
             "match": match
         })
+    # inside generate_and_verify, after match = find_match_in_db(...)
 
-        # success check
-        ok = False
-        identified = (match.get("identifiedChandas") or "").lower()
-        # name match
-        if identified and identified.startswith(chandas_name.lower()):
-            ok = True
-        # numeric confidence check
-        conf = match.get("similarity") or match.get("confidence") or 0
+    ok = False
+    identified = (match.get("identifiedChandas") or "").lower()
+
+    # 1) direct name match (strong)
+    if identified and identified.startswith(chandas_name.lower()):
+        ok = True
+
+    # 2) direct numeric similarity / confidence
+    conf = None
+    if "similarity" in match:
+        try:
+            conf = float(match.get("similarity"))
+        except Exception:
+            conf = None
+    elif "confidence" in match:
+        try:
+            conf = float(match.get("confidence"))
+        except Exception:
+            conf = None
+
+    # 3) fallback: parse percentage from explanation text (e.g. "72.2%")
+    if conf is None:
+        expl = match.get("explanation", "") or ""
+        m_pct = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", expl)
+        if m_pct:
+            try:
+                conf = float(m_pct.group(1)) / 100.0
+            except:
+                conf = None
+
+    # 4) apply threshold if we have a numeric confidence
+    if conf is not None:
         try:
             if float(conf) >= SIMILARITY_THRESHOLD:
                 ok = True
