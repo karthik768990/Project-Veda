@@ -1,11 +1,8 @@
 import os
-import logging
 import re
-from pathlib import Path
 from typing import List, Optional
-
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,49 +21,29 @@ from chandas_analyser.matcher import find_match_in_db
 # Generator import
 from sloka_generator.generator import generate_and_verify
 
-# ---- App setup ----
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("chandas_creator")
-
 app = FastAPI(title="Chandas Creator — Analyzer & Generator", version="1.0")
 
-# --- 1. CORS (dev-friendly) ---
+# --- 1. SETUP CORS (Safety Net) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allows all origins (good for dev)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- 2. STATIC FILES (robust absolute resolution) ---
-# Resolve paths relative to this file, not current working directory
-BASE_DIR = Path(__file__).resolve().parent            # backend/
-PROJECT_ROOT = BASE_DIR.parent                        # project root
-STATIC_DIR = (PROJECT_ROOT / "static").resolve()      # project_root/static
-INDEX_FILE = STATIC_DIR / "index.html"
-
-if STATIC_DIR.exists() and STATIC_DIR.is_dir():
-    logger.info(f"Mounting static files from: {STATIC_DIR}")
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-else:
-    logger.warning(f"Static directory not found at: {STATIC_DIR}. Skipping mounting /static.")
+# --- 2. SERVE FRONTEND (Static Files) ---
+# Ensure you created the 'static' folder in the root directory!
+# Structure: project_root/static/index.html
+app.mount("/static", StaticFiles(directory="../static"), name="static")
 
 @app.get("/")
 async def read_root():
-    """
-    Serve index.html if available; otherwise return a helpful JSON response.
-    This avoids crashing at import time if index.html doesn't exist.
-    """
-    if INDEX_FILE.exists():
-        return FileResponse(str(INDEX_FILE))
-    return JSONResponse({
-        "success": True,
-        "message": "Frontend not built or index.html missing. Run frontend dev server (Vite) or build frontend into project_root/static."
-    })
-
+    # Serves the UI when you go to http://localhost:3000
+    return FileResponse("../static/index.html")
 
 # --- 3. GOOGLE AUTHENTICATION ---
+# TODO: Put your actual Client ID here or in .env
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "YOUR_GOOGLE_CLIENT_ID_HERE")
 
 class LoginRequest(BaseModel):
@@ -75,32 +52,37 @@ class LoginRequest(BaseModel):
 @app.post("/auth/google")
 async def google_login(login_data: LoginRequest):
     try:
+        # Verify the token with Google servers
         idinfo = id_token.verify_oauth2_token(
-            login_data.token,
-            requests.Request(),
+            login_data.token, 
+            requests.Request(), 
             GOOGLE_CLIENT_ID
         )
 
-        user_name = idinfo.get("name", "Poet")
-        email = idinfo.get("email")
+        # Get User Info
+        user_name = idinfo.get('name', 'Poet')
+        email = idinfo.get('email')
 
+        # In a real production app, you would issue a secure Session Cookie here.
+        # For this prototype, we return success so the UI unlocks.
         return {"success": True, "user": user_name, "email": email}
+
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid Google Token")
 
+# --- EXISTING LOGIC BELOW ---
 
-# --- 4. Warm cache on startup ---
+# Warm the chandas cache on startup
 @app.on_event("startup")
 async def startup():
     await get_chandas_cached()
 
+# ... (Rest of your existing endpoints: /chandas, /chandas/analyze) ...
 
-# --- 5. Chandas endpoints ---
 @app.get("/chandas")
 async def get_all_chandas():
     chs = await get_chandas_cached()
     return JSONResponse({"success": True, "message": "Fetched all Chandas successfully ✅", "data": chs})
-
 
 @app.post("/chandas/analyze")
 async def analyze_chandas(payload: ShlokaIn):
@@ -130,9 +112,7 @@ async def analyze_chandas(payload: ShlokaIn):
             }
         })
     except Exception as e:
-        logger.exception("Error during chandas analysis")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 class GenRequest(BaseModel):
     chandas: str
@@ -146,10 +126,11 @@ async def generate_and_verify_route(req: GenRequest):
         result = await generate_and_verify(req.chandas, req.context, req.language, req.max_attempts)
         return JSONResponse(result)
     except Exception as e:
-        logger.exception("Error in generate-and-verify")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=3000, reload=True)
