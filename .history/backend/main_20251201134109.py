@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Google Auth Imports   
+# Google Auth Imports
 from google.oauth2 import id_token
 from google.auth.transport import requests
 

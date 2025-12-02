@@ -7,10 +7,12 @@ from .config import LOCAL_DB
 
 logger = logging.getLogger(__name__)
 
+# cache container
+
 _cached_chandas: Optional[List[Dict[str, Any]]] = None
 _cached_mtime: Optional[float] = None
 
-def _normalize_item(item: Any) -> Dict[str, Any]:
+def _normalize_item(item: Dict[str, Any]) -> Dict[str, Any]:
     """
     Normalize a single chandas entry to a canonical dict with 'name' and 'pattern'.
     Accepts various legacy keys.
@@ -19,8 +21,10 @@ def _normalize_item(item: Any) -> Dict[str, Any]:
         return {"name": str(item), "pattern": ""}
 
     name = item.get("name") or item.get("chandas") or item.get("title") or item.get("id") or ""
+    # pattern might be a list or string; convert lists to joined string
     raw_pattern = item.get("pattern") or item.get("lg") or item.get("pat") or item.get("patterns") or ""
     if isinstance(raw_pattern, list):
+        # join with no separator (patterns are often strings of L/G)
         pattern = "".join(str(p) for p in raw_pattern)
     else:
         pattern = str(raw_pattern or "")
@@ -41,23 +45,11 @@ async def load_chandas_local() -> List[Dict[str, Any]]:
         ]
 
     try:
-        # Log file metadata for debugging
-        try:
-            stat = p.stat()
-            logger.info("LOCAL_DB found at %s (size=%d bytes, mtime=%s)", LOCAL_DB, stat.st_size, stat.st_mtime)
-        except Exception:
-            logger.info("LOCAL_DB found at %s (could not stat file metadata)", LOCAL_DB)
-
         text = p.read_text(encoding="utf-8")
         raw = json.loads(text)
-    except json.JSONDecodeError as jde:
-        logger.exception("JSON parse error reading LOCAL_DB at %s: %s", LOCAL_DB, jde)
-        return [
-            {"name": "Anuṣṭubh", "pattern": "LGLLGGLG"},
-            {"name": "Triṣṭubh", "pattern": "GGLGLGGLGGLG"},
-        ]
     except Exception as e:
         logger.exception("Failed to read/parse LOCAL_DB at %s: %s", LOCAL_DB, e)
+        # return fallback but keep logs for debugging
         return [
             {"name": "Anuṣṭubh", "pattern": "LGLLGGLG"},
             {"name": "Triṣṭubh", "pattern": "GGLGLGGLGGLG"},
@@ -65,6 +57,7 @@ async def load_chandas_local() -> List[Dict[str, Any]]:
 
     # raw can be a list of objects or a dict containing a list (common shapes)
     if isinstance(raw, dict):
+        # try common keys that hold arrays
         candidates = ["data", "chandas", "items", "rows"]
         found = None
         for k in candidates:
@@ -72,17 +65,21 @@ async def load_chandas_local() -> List[Dict[str, Any]]:
                 found = raw[k]
                 break
         if found is None:
+            # if dict but not containing list -> try to interpret as single entry
             found = [raw]
     elif isinstance(raw, list):
         found = raw
     else:
+        # unexpected shape
         logger.warning("Unexpected LOCAL_DB JSON shape (%s). Wrapping into a list.", type(raw))
         found = [raw]
 
+    # normalize every item (do not slice)
     normalized: List[Dict[str, Any]] = []
     for item in found:
         normalized.append(_normalize_item(item))
 
+    # final sanity check — if normalized is empty, fallback
     if len(normalized) == 0:
         logger.warning("LOCAL_DB parsed to empty list. Returning fallback.")
         return [
@@ -90,11 +87,10 @@ async def load_chandas_local() -> List[Dict[str, Any]]:
             {"name": "Triṣṭubh", "pattern": "GGLGLGGLGGLG"},
         ]
 
-    logger.info("Successfully loaded %d chandas entries from %s", len(normalized), LOCAL_DB)
     return normalized
+# change the force reload to be false in the production 
 
-
-async def get_chandas_cached(force_reload: bool = False) -> List[Dict[str, Any]]:
+async def get_chandas_cached(force_reload: bool = True) -> List[Dict[str, Any]]:
     """
     Cached loader. Will reload when:
       - cache is empty,
@@ -104,6 +100,7 @@ async def get_chandas_cached(force_reload: bool = False) -> List[Dict[str, Any]]
     global _cached_chandas, _cached_mtime
     p = Path(LOCAL_DB)
 
+    # check mtime safely
     current_mtime = None
     try:
         if p.exists():
@@ -111,14 +108,16 @@ async def get_chandas_cached(force_reload: bool = False) -> List[Dict[str, Any]]
     except Exception as e:
         logger.debug("Could not stat LOCAL_DB: %s", e)
 
+    # reload conditions
     if force_reload or _cached_chandas is None or (current_mtime and _cached_mtime != current_mtime):
         logger.info("Loading chandas from local DB (force_reload=%s).", force_reload)
         _cached_chandas = await load_chandas_local()
         _cached_mtime = current_mtime
+
+        # log how many entries loaded (helps debug 'only 2' problem)
         logger.info("Loaded %d chandas entries from %s", len(_cached_chandas), LOCAL_DB)
 
     return _cached_chandas
-
 
 def clear_chandas_cache() -> None:
     """

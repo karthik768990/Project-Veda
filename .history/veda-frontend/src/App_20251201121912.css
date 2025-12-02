@@ -1,0 +1,72 @@
+
+/* --- 1. VARIABLES & FONTS --- */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Martel:wght@300;400;700&family=Inter:wght@300;400;600&display=swap');
+
+:root {
+  --bg-deep: #020617;
+  --bg-glass: rgba(20, 20, 30, 0.6);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --gold: #f59e0b;
+  --gold-glow: rgba(245, 158, 11, 0.4);
+  --neon-orange: #ff5f1f;
+  --text-main: #e2e8f0;
+  --text-muted: #94a3b8;
+  --font-ancient: 'Cinzel', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-script: 'Martel', serif;
+}
+
+/* Reset */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background-color: var(--bg-deep);
+  background-image: radial-gradient(circle at 50% 30%, #1e293b 0%, #020617 80%);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
