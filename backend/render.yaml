@@ -1,0 +1,17 @@
+services:
+  # BACKEND SERVICE (Docker)
+  - type: web
+    name: veda-backend
+    runtime: docker
+    rootDir: backend # Tells Render the Dockerfile is in this folder
+    plan: free # Optional: specify plan
+    region: singapore # Optional: specify region
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: PORT
+        value: 10000
+      - key: GEMINI_API_KEY
+        sync: false # You must enter this manually in the Dashboard for security
+      - key: GOOGLE_CLIENT_ID
+        sync: false
