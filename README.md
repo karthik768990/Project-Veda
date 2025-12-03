@@ -1,2 +1,245 @@
-# Project-Veda
-The full-stack Sanskrit Chandas (prosody) identification platform that analyzes any given śloka and automatically determines its metrical pattern using linguistic processing, fuzzy pattern matching, and a curated database of traditional meters. It serves as a modern digital assistant for students,researchers and enthusiasts of Sanskrit literature.
+# 🌺 Project Veda — Sanskrit Chandas Identification & Analysis System
+*A modern AI-powered system to decode the poetic heartbeat of Sanskrit literature.*
+
+---
+
+## 📖 Overview
+
+**Project Veda** is a full-stack Sanskrit *prosody analysis engine* that automatically identifies the **Chandas (meter)** of any Sanskrit śloka.
+
+It uses:
+
+- Linguistic L/G (Laghu–Guru) syllable extraction  
+- Fuzzy similarity matching  
+- Supabase-based canonical Chandas storage  
+- A modern React-based frontend  
+
+This project blends **ancient Sanskrit poetics** with **modern computational linguistics**, creating a bridge between tradition and technology.
+
+---
+
+## ✨ Features
+
+- 🔠 Supports Devanagari + IAST input  
+- 🎼 Accurate Laghu/Guru syllable detection  
+- 🧠 Fuzzy meter identification with confidence scoring  
+- ☁️ Supabase database for Chandas patterns  
+- 🌐 Full-stack architecture (Node + React + Vite + Tailwind)  
+- 🔑 Supabase OAuth (Google Login)  
+- 🚀 Deployable via Vercel (frontend) & Render (backend)  
+- 🐳 Docker support for both services  
+
+---
+
+# 🧭 Project Structure
+
+```bash
+
+veda-chandas/
+│
+├── backend/
+│ ├── controllers/
+│ ├── middleware/
+│ ├── routes/
+│ ├── Dockerfile
+│ └── server.js
+│
+├── frontend/
+│ ├── src/
+│ ├── Dockerfile
+│ ├── vite.config.js
+│ └── package.json
+│
+└── README.md
+
+
+
+
+
+
+```
+
+
+
+
+---
+
+# ⚙️ Backend Setup
+
+## 📌 Environment Variables
+Create `.env` inside `/backend`:
+
+```bash
+
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+PORT=3000
+
+```
+
+
+
+
+## 📦 Install Dependencies
+```bash
+cd backend
+npm install
+
+```
+
+## Run development server 
+```bash
+npm run dev
+```
+
+## 🚀 Run Production Server
+```bash
+npm start
+
+```
+
+## 🧪 Test the API
+
+```bash
+curl -X POST http://localhost:3000/chandas/analyze \
+  -H "Content-Type: application/json" \
+  -d "{\"shloka\": \"गजाननं भूतगणादिसेवितं\"}"
+
+
+```
+
+
+##  🎨 Frontend setup
+
+Create .env inside /frontend:
+
+```bash
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_KEY=your_supabase_key
+
+```
+
+## 📦 Install Dependencies
+
+```bash
+cd frontend
+npm install
+
+
+```
+
+## ▶️ Run Dev Server
+
+```bash
+npm run dev
+```
+
+## 🏗️ Build for Production
+```bash
+npm run build
+
+```
+
+## 🔄 Preview Production Build
+
+```bash
+npm run preview
+
+```
+
+## 🐳 Docker Setup
+
+## Backend
+```bash 
+docker build -t chandas-backend .
+docker run -p 3000:3000 chandas-backend
+```
+## Frontend
+```bash 
+
+docker build -t chandas-frontend .
+docker run -p 5173:80 chandas-frontend
+
+```
+
+## 🌐 Deployment
+Frontend → Vercel
+
+Build command: npm run build
+
+Output directory: dist/
+
+Set environment variables in Vercel dashboard
+
+Backend → Render
+
+Select "Web Service"
+
+Set environment variables
+
+Start command: npm start
+
+## 🧠 How the Engine Works
+1️⃣ Input Validation
+
+Ensures the śloka is clean: trims whitespace, removes HTML tags, checks length, etc.
+
+2️⃣ LG Pattern Extraction
+
+Uses classical Sanskrit prosody rules to compute Laghu (L) and Guru (G) syllables.
+
+3️⃣ Fuzzy Pattern Matching
+
+Fetches meters from Supabase
+
+Repeats canonical pattern to approximate verse length
+
+Computes similarity via Levenshtein distance
+
+If similarity ≥ 70% → identifies meter
+
+Special handling for Anuṣṭubh (8-syllable structure)
+
+4️⃣ Output Data Includes:
+
+Original + transliterated verse
+
+LG pattern per pāda
+
+Combined pattern
+
+Identified Chandas
+
+Explanation + confidence score
+
+## 📚 Applications
+
+Sanskrit learning platforms
+
+Shloka recitation/chanting validation tools
+
+Automated poetic meter classification
+
+Digital humanities research
+
+Mobile/web Sanskrit study apps
+
+
+## 🤝 Contributing
+
+Contributions are welcome!
+You can help by improving accuracy, adding more meters, refining UI, or enhancing algorithms.
+
+## ⭐ Support the Project
+
+If this project helps you, please star ⭐ the repository — it motivates further development!
+
+
+---
+
+If you want, I can also generate:
+
+✅ A clean project logo/banner  
+✅ Badges (build passing, license, tech stack)  
+✅ A “Screenshots” section  
+Just tell me!
