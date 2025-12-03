@@ -1,11 +1,17 @@
 # app/matcher.py
+import logging
 from typing import List, Dict, Any
-import math
+from math import ceil
+from app.config import SIMILARITY_THRESHOLD
+
+logger = logging.getLogger(__name__)
 
 def levenshtein(a: str, b: str) -> int:
     m, n = len(a), len(b)
-    if m == 0: return n
-    if n == 0: return m
+    if m == 0:
+        return n
+    if n == 0:
+        return m
     dp = [[0] * (n + 1) for _ in range(m + 1)]
     for i in range(m + 1):
         dp[i][0] = i
@@ -18,66 +24,84 @@ def levenshtein(a: str, b: str) -> int:
             dp[i][j] = min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + cost)
     return dp[m][n]
 
+
+def _normalize_pattern(p: Any) -> str:
+    """
+    Normalize database pattern into compact 'L'/'G' string without spaces.
+    Accepts list, spaced string, or compact string.
+    """
+    if p is None:
+        return ""
+    if isinstance(p, list):
+        joined = "".join(str(x) for x in p)
+    else:
+        joined = str(p)
+    # remove spaces and anything other than L or G (case-insensitive)
+    normalized = "".join(ch for ch in joined.upper() if ch in ("L", "G"))
+    return normalized
+
+
 def find_match_in_db(lg_patterns: List[str], db_chandas: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Improved matcher:
-    - Accepts db pattern as string or list of strings (alternates)
-    - Computes numeric similarity and returns it as 'similarity' (0..1)
-    - Returns structured dict including 'identifiedChandas', 'similarity', 'matchedPattern', 'explanation'
-    - Keeps Anuṣṭubh heuristic and sets similarity to 1.0 when it matches
+    Find best match given extracted lg_patterns (list of strings).
+    Returns structured dictionary with:
+      - identifiedChandas (string)
+      - similarity (float 0..1)
+      - matchedPattern (canonical DB pattern string)
+      - explanation (text)
     """
-    if not lg_patterns or len(lg_patterns) == 0:
-        return {"identifiedChandas": "Unknown", "similarity": 0.0, "explanation": "Input was empty or contained no recognizable vowels."}
+    if not lg_patterns:
+        return {"identifiedChandas": "Unknown", "similarity": 0.0, "matchedPattern": "", "explanation": "No vowels/syllables detected."}
 
-    combined = "".join(lg_patterns)
+    combined = "".join(lg_patterns).upper()
+    logger.debug("Combined LG pattern: %s", combined)
 
     best = {"name": "Unknown / Mixed", "similarity": 0.0, "matchedPattern": ""}
 
+    # iterate DB chandas
     for ch in db_chandas:
-        base_raw = ch.get("pattern", "")
-        # allow list of patterns or single string
-        bases = base_raw if isinstance(base_raw, list) else [base_raw]
+        raw = ch.get("pattern", "") or ch.get("patterns") or ch.get("lg") or ""
+        # allow list or string
+        candidates = raw if isinstance(raw, list) else [raw]
 
-        for base in bases:
-            if not isinstance(base, str) or base.strip() == "":
+        for cand in candidates:
+            base = _normalize_pattern(cand)
+            if not base:
                 continue
 
-            # repeat base to approximate total length and truncate (same as JS)
-            repeat_times = -(-len(combined) // len(base))  # ceil division
-            repeated = (base * repeat_times)[:len(combined)]
+            # repeat base to match combined length
+            rep_times = ceil(max(1, len(combined)) / len(base))
+            repeated = (base * rep_times)[:len(combined)]
 
             distance = levenshtein(combined, repeated)
-            similarity = 1 - (distance / max(1, len(combined)))
+            similarity = 1.0 - (distance / max(1, len(combined)))
+
+            logger.debug("Comparing to DB chandas '%s' base='%s' distance=%d similarity=%.3f",
+                         ch.get("name", "<unnamed>"), base, distance, similarity)
 
             if similarity > best["similarity"]:
                 best = {"name": ch.get("name", "Unknown"), "similarity": similarity, "matchedPattern": base}
 
-    # Anuṣṭubh check (every 8-syllable pada must have 5th L and 6th G)
-    if len(combined) % 8 == 0:
+    # Anuṣṭubh heuristic: if pattern len divisible by 8 and each pada has 5th L and 6th G
+    if len(combined) % 8 == 0 and len(combined) >= 8:
         padas = [combined[i:i+8] for i in range(0, len(combined), 8)]
-        ok = all(len(p) == 8 and p[4] == "L" and p[5] == "G" for p in padas)
-        if ok:
-            # high confidence for Anuṣṭubh heuristic
+        if all(len(p) == 8 and p[4] == "L" and p[5] == "G" for p in padas):
+            explanation = f"Matches Anuṣṭubh heuristic (pādas: {len(padas)}). Full pattern: '{combined}'."
             return {
                 "identifiedChandas": "Anuṣṭubh",
                 "similarity": 1.0,
                 "matchedPattern": "LGLLGGLG",
-                "explanation": f"Matches Anuṣṭubh (8-syllable pādas, 5th Laghu, 6th Guru). Full pattern: '{combined}'"
+                "explanation": explanation
             }
 
-    # threshold logic (0.7) — return structured data including numeric similarity
-    if best["similarity"] >= 0.0:
-        # Build an explanation string containing percentage for backwards compatibility
-        percent = best["similarity"] * 100.0
-        explanation = f"Detected pattern ({len(combined)} syllables) matches {best['name']} with {percent:.1f}% confidence.\nCanonical pattern: {best['matchedPattern']}"
-        # if similarity below threshold, still return similarity but mark identified accordingly
-        identified = best["name"] if best["similarity"] >= 0.7 else "Unknown / Mixed"
-        return {
-            "identifiedChandas": identified,
-            "similarity": best["similarity"],
-            "matchedPattern": best["matchedPattern"],
-            "explanation": explanation
-        }
-
-    # Fallback
-    return {"identifiedChandas": "Unknown / Mixed", "similarity": 0.0, "explanation": f"Could not match any standard Chandas. Full pattern: '{combined}' (length {len(combined)})."}
+    # Build response from best match
+    percent = best["similarity"] * 100.0
+    identified = best["name"] if best["similarity"] >= float(SIMILARITY_THRESHOLD) else "Unknown / Mixed"
+    explanation = (f"Detected pattern ({len(combined)} syllables) matches {best['name']} with {percent:.1f}% confidence."
+                   f"\nCanonical pattern: {best['matchedPattern']}")
+    return {
+        "identifiedChandas": identified,
+        "similarity": round(best["similarity"], 4),
+        "matchedPattern": best["matchedPattern"],
+        "explanation": explanation
+    }
