@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chanda Viveka | The Neural Poet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Martel:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+    <canvas id="sanskrit-canvas"></canvas>
+
+    <div id="login-overlay" class="auth-gate">
+        <div class="glass-deck auth-card">
+            <div class="logo-mark">ॐ</div>
+            <h2>Identity Verification</h2>
+            <p>Enter the Sanctum of Chanda Viveka</p>
+            
+            <div id="g_id_onload"
+                 data-client_id="YOUR_GOOGLE_CLIENT_ID_HERE"
+                 data-callback="handleCredentialResponse"
+                 data-auto_prompt="false"
+                 data-theme="filled_black">
+            </div>
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-size="large"
+                 data-theme="filled_black"
+                 data-text="sign_in_with"
+                 data-shape="pill"
+                 data-logo_alignment="left">
+            </div>
+        </div>
+    </div>
+
+    <main class="container blur-content" id="main-app">
+        <header class="hero-section">
+            <div class="header-content">
+                <div class="logo-mark">ॐ</div>
+                <h1>Chanda Viveka</h1>
+                <p class="tagline">Neural Sanskrit Prosody Engine</p>
+            </div>
+            <div id="user-badge" class="user-badge hidden">
+                Logged in as <span id="user-name">Poet</span>
+            </div>
+        </header>
+
+        <div class="glass-deck">
+            <section class="input-zone">
+                <div class="input-group">
+                    <label>Select Meter (Chandas)</label>
+                    <div class="select-wrapper">
+                        <select id="chandas-select">
+                            <option value="Anuṣṭubh">Anuṣṭubh (8 syl)</option>
+                            <option value="Vasantatilaka">Vasantatilaka (14 syl)</option>
+                            <option value="Mandakranta">Mandakranta (17 syl)</option>
+                            <option value="Shardulavikridita">Shardulavikridita (19 syl)</option>
+                        </select>
+                        <span class="focus-border"></span>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Poetic Context</label>
+                    <div class="textarea-wrapper">
+                        <textarea id="context-input" placeholder="Describe the scene (e.g., 'Arjuna observing the vast army at sunrise')..."></textarea>
+                        <span class="focus-border"></span>
+                    </div>
+                </div>
+
+                <button id="generate-btn" class="forge-btn">
+                    <span class="btn-text">Generate Sloka</span>
+                </button>
+            </section>
+
+            <section class="output-zone" id="output-panel">
+                <div id="loader" class="loader-overlay hidden">
+                    <div class="spinner-rune">ॐ</div>
+                    <p class="blink">Consulting the Sages...</p>
+                </div>
+
+                <div id="result-content">
+                    <div class="sloka-display" id="sloka-text">
+                        <span style="color:rgba(255,255,255,0.3); font-size:1rem;">
+                            The ancient verses will appear here...
+                        </span>
+                    </div>
+                    
+                    <div class="meta-data">
+                        <div class="meta-item">
+                            <span class="label">Analysis:</span>
+                            <span id="analysis-status" class="value">Waiting</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="label">Attempts:</span>
+                            <span id="attempt-count" class="value">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

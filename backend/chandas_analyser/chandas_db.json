@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Anuṣṭubh",
+    "pattern": "L G L G L G L G",
+    "syllables_per_pada": 8,
+    "pattern_regex": "x-x-x-x-L-G-L-x"
+  },
+  {
+    "name": "Indravajrā",
+    "pattern": "G G L G G L L G L G G",
+    "syllables_per_pada": 11,
+    "pattern_regex": "G G L G G L L G L G G"
+  },
+  {
+    "name": "Upendravajrā",
+    "pattern": "L G L G G L L G L G G",
+    "syllables_per_pada": 11,
+    "pattern_regex": "L G L G G L L G L G G"
+  },
+  {
+    "name": "Upajāti",
+    "pattern": "Mixed Indravajrā/Upendravajrā",
+    "syllables_per_pada": 11,
+    "pattern_regex": "x G L G G L L G L G G"
+  },
+  {
+    "name": "Vamśastha",
+    "pattern": "L G L G G L L G L G L G",
+    "syllables_per_pada": 12,
+    "pattern_regex": "L G L G G L L G L G L G"
+  },
+  {
+    "name": "Drutavilambita",
+    "pattern": "L L L G L L G L L G L G",
+    "syllables_per_pada": 12,
+    "pattern_regex": "L L L G L L G L L G L G"
+  },
+  {
+    "name": "Bhujangaprayāta",
+    "pattern": "L G G L G G L G G L G G",
+    "syllables_per_pada": 12,
+    "pattern_regex": "L G G L G G L G G L G G"
+  },
+  {
+    "name": "Vasantatilakā",
+    "pattern": "G G L G L L L G L L G L G G",
+    "syllables_per_pada": 14,
+    "pattern_regex": "G G L G L L L G L L G L G G"
+  },
+  {
+    "name": "Mālinī",
+    "pattern": "L L L L L L G G G L G G L G G",
+    "syllables_per_pada": 15,
+    "pattern_regex": "L L L L L L G G G L G G L G G"
+  },
+  {
+    "name": "Mandākrāntā",
+    "pattern": "G G G G L L L L L G G L G G L G G",
+    "syllables_per_pada": 17,
+    "pattern_regex": "G G G G L L L L L G G L G G L G G"
+  },
+  {
+    "name": "Śikhariṇī",
+    "pattern": "L G G G G G L L L L L G G L L L G",
+    "syllables_per_pada": 17,
+    "pattern_regex": "L G G G G G L L L L L G G L L L G"
+  },
+  {
+    "name": "Śārdūlavikrīḍita",
+    "pattern": "G G G L L G L G L L L G G G L G G L G",
+    "syllables_per_pada": 19,
+    "pattern_regex": "G G G L L G L G L L L G G G L G G L G"
+  },
+  {
+    "name": "Sragdharā",
+    "pattern": "G G G G L G G L L L L L L G G L G G L G G",
+    "syllables_per_pada": 21,
+    "pattern_regex": "G G G G L G G L L L L L L G G L G G L G G"
+  }
+]

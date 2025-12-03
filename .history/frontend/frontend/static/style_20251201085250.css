@@ -1,0 +1,218 @@
+:root {
+    --void-bg: #03030a;
+    --glass: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --gold: #FFD700;
+    --neon-cyan: #00f3ff;
+    --neon-purple: #bc13fe;
+    --text: #e0e0e0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--void-bg);
+    background: radial-gradient(circle at center, #1a1a2e 0%, #03030a 100%);
+    font-family: 'Martel', serif;
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Background Canvas */
+#sanskrit-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    opacity: 0.6;
+}
+
+/* Container */
+.container {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 1100px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+}
+
+.hero-section {
+    text-align: center;
+}
+
+.logo-mark {
+    font-size: 3rem;
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    animation: float 3s ease-in-out infinite;
+}
+
+h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 3rem;
+    margin: 10px 0 5px;
+    letter-spacing: 4px;
+    background: linear-gradient(to right, #fff, #aaa);
+    -webkit-background-clip: text;
+    color: transparent;
+}
+
+.tagline {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Glass Deck (The Main Card) */
+.glass-deck {
+    display: flex;
+    width: 100%;
+    gap: 40px;
+    background: var(--glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 40px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+.input-zone, .output-zone {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Inputs styling */
+.input-group label {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    color: var(--gold);
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.select-wrapper, .textarea-wrapper {
+    position: relative;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    transition: 0.3s;
+}
+
+select, textarea {
+    width: 100%;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+    padding: 15px;
+    font-family: 'Martel', serif;
+    font-size: 1rem;
+    outline: none;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+textarea {
+    resize: none;
+    height: 120px;
+}
+
+/* THE GLOW LOGIC: Opposite Color */
+/* When focused, border becomes Neon Cyan (Cool) against the Dark/Warm background */
+select:focus, textarea:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.2), inset 0 0 10px rgba(0, 243, 255, 0.05);
+    background: rgba(0, 243, 255, 0.02);
+}
+
+/* Button */
+.forge-btn {
+    margin-top: 10px;
+    padding: 18px;
+    background: linear-gradient(135deg, var(--gold), #d4af37);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #000;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.forge-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+}
+
+/* Output Area */
+.output-zone {
+    border-left: 1px solid rgba(255,255,255,0.05);
+    padding-left: 40px;
+    justify-content: center;
+    position: relative;
+    min-height: 300px;
+}
+
+.sloka-display {
+    font-size: 1.4rem;
+    line-height: 2;
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255,255,255,0.2);
+    white-space: pre-wrap;
+}
+
+.meta-data {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.5);
+}
+
+.status-success { color: #4ade80; text-shadow: 0 0 10px rgba(74, 222, 128, 0.3); }
+.status-fail { color: #f87171; }
+
+/* Loader */
+.loader-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(5px);
+    border-radius: 16px;
+    z-index: 20;
+}
+
+.spinner-rune {
+    font-size: 4rem;
+    color: var(--gold);
+    animation: spin 3s linear infinite;
+}
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.hidden { display: none; }
