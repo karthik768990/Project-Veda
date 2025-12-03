@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose the port (Render usually uses 10000)
-ENV PORT=10000
+ENV PORT=3000
 EXPOSE 10000
 
 # Start the server
