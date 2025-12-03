@@ -114,26 +114,45 @@ async def analyze_chandas(payload: ShlokaIn):
         devanagari_form = shloka if is_devanagari else to_devanagari(shloka)
         latin_form = to_iast(shloka) if is_devanagari else shloka
 
+        # Extract LG patterns per pada
         pada_patterns: List[str] = get_lg_pattern(shloka)
-        combined_pattern = "|".join(pada_patterns)
+        combined_compact = "".join(pada_patterns)
+        combined_by_pada = "|".join(pada_patterns)
 
+        # Load DB
         db_chandas = await get_chandas_cached()
+
+        # Match and obtain structured result (now includes similarity & matchedPattern)
         match = find_match_in_db(pada_patterns, db_chandas)
+
+        # Log useful debug info
+        logger.info("Analysis input (devanagari present=%s). latin_form=%s", is_devanagari, (latin_form[:80] + "...") if len(str(latin_form))>80 else latin_form)
+        logger.info("LG patterns byPada=%s combined=%s", pada_patterns, combined_compact)
+        logger.info("Matcher result: %s", match)
 
         return JSONResponse({
             "success": True,
             "message": "Chandas analysis successful ✅",
             "analysis": {
-                "input": {"original": shloka, "devanagari": devanagari_form, "latin": latin_form},
-                "pattern": {"byPada": pada_patterns, "combined": combined_pattern},
+                "input": {
+                    "original": shloka,
+                    "devanagari": devanagari_form,
+                    "latin": latin_form
+                },
+                "pattern": {
+                    "byPada": pada_patterns,
+                    "combined_compact": combined_compact,
+                    "combined_by_pada": combined_by_pada
+                },
                 "identifiedChandas": match.get("identifiedChandas"),
+                "similarity": match.get("similarity"),
+                "matchedPattern": match.get("matchedPattern"),
                 "explanation": match.get("explanation")
             }
         })
     except Exception as e:
         logger.exception("Error during chandas analysis")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 class GenRequest(BaseModel):
     chandas: str
