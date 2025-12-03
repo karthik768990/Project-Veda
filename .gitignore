@@ -70,7 +70,4 @@ backend/.gitignore
 #This is for the frontend
 veda-frontend/node_modules/
 veda-frontend/.env
-veda-frontend/
-veda-frontend/
-veda-frontend/
-veda-frontend/
+
