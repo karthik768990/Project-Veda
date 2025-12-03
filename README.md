@@ -82,14 +82,15 @@ PORT=3000
 
 ## 📦 Install Dependencies
 ```bash
-cd backend
-npm install
+cd veda-backend
+pip install -r requirements.txt
 
 ```
 
 ## Run development server 
 ```bash
-npm run dev
+uvicorn main:app --reload --host 0.0.0.0 --port 3000
+
 ```
 
 ## 🚀 Run Production Server
@@ -114,15 +115,15 @@ curl -X POST http://localhost:3000/chandas/analyze \
 Create .env inside /frontend:
 
 ```bash
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_KEY=your_supabase_key
+VITE_BASE_URL = your_backend_url
+VITE_GOOGLE_CLIENT_ID = your_google_client_id_cloudconsole
 
 ```
 
 ## 📦 Install Dependencies
 
 ```bash
-cd frontend
+cd veda-frontend
 npm install
 
 
