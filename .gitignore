@@ -65,7 +65,7 @@ backend/chandas_analyser/__pycache__/
 backend/sloka_generator/__pycache__/
 backend/tests/
 backend/.gitignore
-
+backend/.env
 
 #This is for the frontend
 veda-frontend/node_modules/
