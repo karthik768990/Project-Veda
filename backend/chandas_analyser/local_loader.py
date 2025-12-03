@@ -1,130 +1,92 @@
-# app/local_loader.py
 import json
 import logging
+import os
+import aiofiles  # Ensure you have this: pip install aiofiles
 from typing import List, Dict, Any, Optional
-from pathlib import Path
-from .config import LOCAL_DB
 
 logger = logging.getLogger(__name__)
 
+# Cache variable
 _cached_chandas: Optional[List[Dict[str, Any]]] = None
 _cached_mtime: Optional[float] = None
 
 def _normalize_item(item: Any) -> Dict[str, Any]:
     """
     Normalize a single chandas entry to a canonical dict with 'name' and 'pattern'.
-    Accepts various legacy keys.
     """
     if not isinstance(item, dict):
         return {"name": str(item), "pattern": ""}
 
     name = item.get("name") or item.get("chandas") or item.get("title") or item.get("id") or ""
     raw_pattern = item.get("pattern") or item.get("lg") or item.get("pat") or item.get("patterns") or ""
+    
+    # Handle list patterns (if any)
     if isinstance(raw_pattern, list):
         pattern = "".join(str(p) for p in raw_pattern)
     else:
         pattern = str(raw_pattern or "")
-    return {"name": name, "pattern": pattern}
-
+        
+    # Preserve other useful keys like pattern_regex or syllables_per_pada
+    return {
+        "name": name, 
+        "pattern": pattern,
+        "pattern_regex": item.get("pattern_regex", ""),
+        "syllables_per_pada": item.get("syllables_per_pada", 0)
+    }
 
 async def load_chandas_local() -> List[Dict[str, Any]]:
     """
-    Read chandas_db.json (or LOCAL_DB path). Returns a normalized list of chandas dicts.
-    If file missing or invalid, returns a small safe fallback.
+    Read chandas_db.json from the SAME DIRECTORY as this script.
     """
-    p = Path(LOCAL_DB)
-    if not p.exists():
-        logger.warning("LOCAL_DB not found at %s — returning fallback set", LOCAL_DB)
+    # 1. CALCULATE ABSOLUTE PATH
+    # Current file: backend/chandas_analyser/local_loader.py
+    # Database file: backend/chandas_analyser/chandas_db.json
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(current_dir, "chandas_db.json")
+
+    if not os.path.exists(db_path):
+        logger.error(f"❌ DATABASE NOT FOUND at: {db_path}")
+        # Fallback list so the app doesn't crash empty
         return [
-            {"name": "Anuṣṭubh", "pattern": "LGLLGGLG"},
-            {"name": "Triṣṭubh", "pattern": "GGLGLGGLGGLG"},
+            {"name": "Anuṣṭubh", "pattern": "L G L G L G L G", "syllables_per_pada": 8},
+            {"name": "Vasantatilakā", "pattern": "G G L G L L L G L L G L G G", "syllables_per_pada": 14}
         ]
 
     try:
-        # Log file metadata for debugging
-        try:
-            stat = p.stat()
-            logger.info("LOCAL_DB found at %s (size=%d bytes, mtime=%s)", LOCAL_DB, stat.st_size, stat.st_mtime)
-        except Exception:
-            logger.info("LOCAL_DB found at %s (could not stat file metadata)", LOCAL_DB)
+        # 2. ASYNC READ
+        async with aiofiles.open(db_path, mode='r', encoding='utf-8') as f:
+            content = await f.read()
+            raw = json.loads(content)
+            
+        logger.info(f"✅ Loaded DB from {db_path} (Size: {len(raw)} items)")
+        
+        # 3. NORMALIZE
+        normalized = []
+        # Handle if the root is a dict or list
+        items = raw if isinstance(raw, list) else raw.get('data', [])
+        
+        for item in items:
+            normalized.append(_normalize_item(item))
+            
+        return normalized
 
-        text = p.read_text(encoding="utf-8")
-        raw = json.loads(text)
-    except json.JSONDecodeError as jde:
-        logger.exception("JSON parse error reading LOCAL_DB at %s: %s", LOCAL_DB, jde)
-        return [
-            {"name": "Anuṣṭubh", "pattern": "LGLLGGLG"},
-            {"name": "Triṣṭubh", "pattern": "GGLGLGGLGGLG"},
-        ]
     except Exception as e:
-        logger.exception("Failed to read/parse LOCAL_DB at %s: %s", LOCAL_DB, e)
+        logger.exception(f"Failed to parse DB: {e}")
+        # Return fallback on crash
         return [
-            {"name": "Anuṣṭubh", "pattern": "LGLLGGLG"},
-            {"name": "Triṣṭubh", "pattern": "GGLGLGGLGGLG"},
+            {"name": "Anuṣṭubh (Fallback)", "pattern": "L G L G L G L G"},
         ]
-
-    # raw can be a list of objects or a dict containing a list (common shapes)
-    if isinstance(raw, dict):
-        candidates = ["data", "chandas", "items", "rows"]
-        found = None
-        for k in candidates:
-            if k in raw and isinstance(raw[k], list):
-                found = raw[k]
-                break
-        if found is None:
-            found = [raw]
-    elif isinstance(raw, list):
-        found = raw
-    else:
-        logger.warning("Unexpected LOCAL_DB JSON shape (%s). Wrapping into a list.", type(raw))
-        found = [raw]
-
-    normalized: List[Dict[str, Any]] = []
-    for item in found:
-        normalized.append(_normalize_item(item))
-
-    if len(normalized) == 0:
-        logger.warning("LOCAL_DB parsed to empty list. Returning fallback.")
-        return [
-            {"name": "Anuṣṭubh", "pattern": "LGLLGGLG"},
-            {"name": "Triṣṭubh", "pattern": "GGLGLGGLGGLG"},
-        ]
-
-    logger.info("Successfully loaded %d chandas entries from %s", len(normalized), LOCAL_DB)
-    return normalized
-
 
 async def get_chandas_cached(force_reload: bool = False) -> List[Dict[str, Any]]:
-    """
-    Cached loader. Will reload when:
-      - cache is empty,
-      - force_reload=True,
-      - or file modification time changed since last load.
-    """
-    global _cached_chandas, _cached_mtime
-    p = Path(LOCAL_DB)
-
-    current_mtime = None
-    try:
-        if p.exists():
-            current_mtime = p.stat().st_mtime
-    except Exception as e:
-        logger.debug("Could not stat LOCAL_DB: %s", e)
-
-    if force_reload or _cached_chandas is None or (current_mtime and _cached_mtime != current_mtime):
-        logger.info("Loading chandas from local DB (force_reload=%s).", force_reload)
+    global _cached_chandas
+    
+    # Reload if cache is empty, forced, or contains only the fallback
+    if force_reload or _cached_chandas is None or len(_cached_chandas) <= 2:
         _cached_chandas = await load_chandas_local()
-        _cached_mtime = current_mtime
-        logger.info("Loaded %d chandas entries from %s", len(_cached_chandas), LOCAL_DB)
-
+        
     return _cached_chandas
 
-
 def clear_chandas_cache() -> None:
-    """
-    Clear the in-memory cache (useful in tests or admin endpoints).
-    """
-    global _cached_chandas, _cached_mtime
+    global _cached_chandas
     _cached_chandas = None
-    _cached_mtime = None
     logger.info("Cleared chandas cache.")
