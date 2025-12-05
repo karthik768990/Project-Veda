@@ -10,4 +10,4 @@ services:
     ports:
       - "5173:5173"   # host:containerchr
       
-    restart: unless-stopped
+    restart: unless-stopped00
