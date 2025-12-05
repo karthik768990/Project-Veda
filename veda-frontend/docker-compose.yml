@@ -8,5 +8,6 @@ services:
     env_file:
       - ./.env
     ports:
-      - "5173:5173"   # host:container
+      - "5173:5173"   # host:containerchr
+      
     restart: unless-stopped
