@@ -236,11 +236,3 @@ You can help by improving accuracy, adding more meters, refining UI, or enhancin
 If this project helps you, please star ⭐ the repository — it motivates further development!
 
 
----
-
-If you want, I can also generate:
-
-✅ A clean project logo/banner  
-✅ Badges (build passing, license, tech stack)  
-✅ A “Screenshots” section  
-Just tell me!
