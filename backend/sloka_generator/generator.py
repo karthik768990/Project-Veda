@@ -95,12 +95,14 @@ def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
     if m:
         shloka = m.group(1).strip()
     else:
+        # Fallback 1: Extract pure Devanagari block
         blocks = DEVANAGARI_RE.findall(txt)
         blocks = [b.strip() for b in blocks if len(b.strip()) > 8]
         if blocks:
             shloka = max(blocks, key=len)
         else:
-            lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
+            # Fallback 2: Grab text that actually looks like poetry (4 lines) and isn't purely english metadata
+            lines = [ln.strip() for ln in txt.splitlines() if ln.strip() and not ln.strip().startswith("*") and not ln.strip().startswith("Name:") and not ln.strip().startswith("Target:")]
             shloka = "\n".join(lines[:4])
 
     m2 = re.search(r"---META---(.*?)---END_META---", txt, re.S)
@@ -122,6 +124,7 @@ async def _generate_with_sdk_async(prompt: str) -> str:
             config=types.GenerateContentConfig(
                 temperature=0.0,
                 max_output_tokens=512,
+                system_instruction="You are a strict Sanskrit prosody API. You MUST output ONLY the requested ---BEGIN_SHLOKA--- and ---META--- blocks. Do NOT output any conversational text, introductions, or vocabularies."
             )
         )
         return response.text
