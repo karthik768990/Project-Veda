@@ -36,9 +36,12 @@ export const Generator = ({ apiBase }) => {
       if (!res.ok) {
         setError(data.detail || "Server Error");
       } else if (!data.success) {
-        // AI failed after max attempts, but we still want to show the final attempt
-        setError("AI failed to perfectly match the requested meter after multiple attempts.");
-        setOut(data);
+        if (data.error) {
+          setError(data.error);
+        } else {
+          setError("AI failed to perfectly match the requested meter after multiple attempts.");
+          setOut(data);
+        }
       } else {
         setOut(data);
       }
