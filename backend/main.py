@@ -33,7 +33,7 @@ app = FastAPI(title="Chandas Creator — Analyzer & Generator", version="1.0")
 # --- 1. CORS (dev-friendly) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*","http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origins=["*","http://127.0.0.1:5173", "http://localhost:5173","https://project-veda-mu.vercel.app/","http://project-veda-mu.vercel.app/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
