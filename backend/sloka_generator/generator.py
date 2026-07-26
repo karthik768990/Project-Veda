@@ -111,14 +111,15 @@ def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
 
 async def _generate_with_sdk_async(prompt: str) -> str:
     """
-    Generate content using the official google.generativeai SDK.
+    Generate content using the official google-genai SDK.
     """
     _ensure_client()
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        response = await model.generate_content_async(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
+        from google.genai import types
+        response = await _client.aio.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
                 temperature=0.0,
                 max_output_tokens=512,
             )
