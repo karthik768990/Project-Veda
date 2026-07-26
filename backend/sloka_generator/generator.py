@@ -74,7 +74,7 @@ explanation: <one-line justification>
 """
     return prompt
 
-DEVANAGARI_RE = re.compile(r"[\u0900-\u097F\s।॥,०-९\-]+", re.U)
+DEVANAGARI_RE = re.compile(r"[\u0900-\u097F\s।॥,०-९\-\.\'\"\!\?\(\)]+", re.U)
 
 def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
     txt = generated_text
@@ -91,11 +91,12 @@ def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
     shloka = ""
     meta = ""
 
-    m = re.search(r"---BEGIN_SHLOKA---(.*?)---END_SHLOKA---", txt, re.S)
+    # Robust matching for ---BEGIN_SHLOKA--- ignoring markdown bolding and spaces
+    m = re.search(r"\**-{2,}BEGIN_SHLOKA-{2,}\**(.*?)\**-{2,}END_SHLOKA-{2,}\**", txt, re.S | re.IGNORECASE)
     if m:
         shloka = m.group(1).strip()
     else:
-        # Fallback 1: Extract pure Devanagari block
+        # Fallback 1: Extract pure Devanagari block (now tolerates punctuation)
         blocks = DEVANAGARI_RE.findall(txt)
         blocks = [b.strip() for b in blocks if len(b.strip()) > 8]
         if blocks:
@@ -105,7 +106,7 @@ def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
             lines = [ln.strip() for ln in txt.splitlines() if ln.strip() and not ln.strip().startswith("*") and not ln.strip().startswith("Name:") and not ln.strip().startswith("Target:")]
             shloka = "\n".join(lines[:4])
 
-    m2 = re.search(r"---META---(.*?)---END_META---", txt, re.S)
+    m2 = re.search(r"\**-{2,}META-{2,}\**(.*?)\**-{2,}END_META-{2,}\**", txt, re.S | re.IGNORECASE)
     if m2:
         meta = m2.group(1).strip()
 
