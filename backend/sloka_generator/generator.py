@@ -1,16 +1,11 @@
-# sloka_generator/generator.py
 import os
-import httpx
 import json
 import re
-import asyncio
 import logging
 from typing import Optional, Dict, Any
 
-
 from dotenv import load_dotenv
 
-# try to import official SDK; if missing fall back later
 try:
     import google.generativeai as genai
     _HAS_GENAI = True
@@ -18,14 +13,12 @@ except Exception:
     genai = None
     _HAS_GENAI = False
 
-# analyser imports (these must be available in your project)
 try:
     from chandas_analyser.syllabifier import get_lg_pattern, to_iast, to_devanagari
     from chandas_analyser.matcher import find_match_in_db
     from chandas_analyser.local_loader import get_chandas_cached
     from chandas_analyser.config import SIMILARITY_THRESHOLD
 except Exception:
-    # graceful fallback: keep file importable for testing
     get_lg_pattern = lambda x: []
     find_match_in_db = lambda x, y: {}
     async def get_chandas_cached(): return []
@@ -33,46 +26,45 @@ except Exception:
 
 load_dotenv()
 
-# Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-# Note: if you previously used GEMINI_API_BASE, the SDK takes care of endpoints.
 
 DEFAULT_MAX_ATTEMPTS = 5
 TIMEOUT = 30.0
 
-# Setup logging
 logger = logging.getLogger("sloka_generator")
 logging.basicConfig(level=logging.INFO)
 
-# Configure SDK if available
-if _HAS_GENAI:
-    if not GEMINI_API_KEY:
-        logger.warning("GEMINI_API_KEY not set; generator will fail until set.")
-    else:
-        try:
-            genai.configure(api_key=GEMINI_API_KEY)
-            logger.info("Configured google.generativeai SDK.")
-        except Exception as e:
-            logger.warning(f"Failed to configure google.generativeai SDK: {e}")
+_client_initialized = False
 
-# ---------------- prompt + parsing ----------------
+def _ensure_client():
+    global _client_initialized
+    if not _HAS_GENAI:
+        raise RuntimeError("google.generativeai SDK is not installed.")
+    if not _client_initialized:
+        if not GEMINI_API_KEY:
+            logger.warning("GEMINI_API_KEY not set; generator will fail until set.")
+            raise RuntimeError("GEMINI_API_KEY is not set.")
+        genai.configure(api_key=GEMINI_API_KEY)
+        logger.info("Configured google.generativeai SDK globally.")
+        _client_initialized = True
+
 def build_prompt(chandas_name: str, context: str, language: str="devanagari", extra_instructions: Optional[str]=None) -> str:
-    chandas_hint = {
-        "Anuṣṭubh": "Each pāda must be 8 syllables. 5th syllable Laghu, 6th syllable Guru.",
-        "Triṣṭubh": "Each pāda must be 11 syllables."
-    }.get(chandas_name, "Follow the canonical meter for " + chandas_name + ".")
     lang_note = "Output must be in Devanagari." if language == "devanagari" else "Output must be in IAST (Latin)."
-
-    # Strong deterministic prompt: ask for only the block.
-    prompt = f"""You are a classical Sanskrit poet and prosody expert.
+    
+    prompt = f"""You are a master classical Sanskrit poet and prosody expert.
 Produce EXACTLY one śloka in {language} that satisfies the following constraints:
-1) Chandas: {chandas_name}. {chandas_hint}
-2) Context / topic: {context}
-3) Output only the exact blocks below — no explanation, no extra text.
+
+1) Chandas (Meter): {chandas_name}.
+2) Context / Topic: {context}.
+3) Strict Metrical Constraints: 
+   - Laghu (L): Short vowels (a, i, u, ṛ, ḷ) not followed by a conjunct consonant.
+   - Guru (G): Long vowels (ā, ī, ū, ṝ, e, ai, o, au) OR short vowels followed by anusvara (ṃ/ṁ), visarga (ḥ), or a conjunct consonant.
+   - You MUST follow the exact syllable count and L/G pattern for this meter.
+4) Formatting: Output ONLY the exact blocks below — no extra markdown, no introduction, no conversational text.
 
 ---BEGIN_SHLOKA---
-<the shloka lines in one or more lines>
+<the shloka lines>
 ---END_SHLOKA---
 ---META---
 syllable_pattern: <LG pattern per pada separated by |>
@@ -83,36 +75,19 @@ explanation: <one-line justification>
 """
     return prompt
 
-# Robust extraction with Devanagari fallback
 DEVANAGARI_RE = re.compile(r"[\u0900-\u097F\s।॥,०-९\-]+", re.U)
-# inside sloka_generator/generator.py (replace existing function)
 
 def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
-    """
-    Extracts the shloka and meta from the model output.
-    Handles cases where the model returned a JSON-like wrapper (e.g. {"parts":[{"text":"..."}]})
-    """
     txt = generated_text
-
-    # if it's a JSON string containing 'parts' or 'candidates', extract the inner text
     try:
         if isinstance(generated_text, str):
             st = generated_text.strip()
             if st.startswith("{") or st.startswith("["):
                 parsed = json.loads(st)
-                # common wrapper: {"parts":[{"text":"..."}], "role":"model"}
-                if isinstance(parsed, dict):
-                    if "parts" in parsed and isinstance(parsed["parts"], list) and len(parsed["parts"]) > 0:
-                        first = parsed["parts"][0]
-                        if isinstance(first, dict) and "text" in first:
-                            txt = first["text"]
-                    # alternative location
-                    if txt == parsed and "candidates" in parsed and parsed["candidates"]:
-                        c0 = parsed["candidates"][0]
-                        txt = c0.get("content") or c0.get("text") or txt
+                if isinstance(parsed, dict) and "parts" in parsed and parsed["parts"]:
+                    txt = parsed["parts"][0].get("text", txt)
     except Exception:
-        # If JSON parse fails, just use original generated_text
-        txt = generated_text
+        pass
 
     shloka = ""
     meta = ""
@@ -121,7 +96,6 @@ def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
     if m:
         shloka = m.group(1).strip()
     else:
-        # fallback: largest Devanagari block
         blocks = DEVANAGARI_RE.findall(txt)
         blocks = [b.strip() for b in blocks if len(b.strip()) > 8]
         if blocks:
@@ -136,79 +110,24 @@ def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
 
     return {"shloka": shloka, "meta": meta, "raw": generated_text}
 
-# ---------------- SDK wrapper ----------------
-
-
-# Ensure GEMINI_API_KEY and GEMINI_MODEL are set earlier in the file
-# GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-
 async def _generate_with_sdk_async(prompt: str) -> str:
     """
-    Use Google Generative Language REST endpoint via httpx.
-    Returns the generated text (string) or raises RuntimeError on failure.
+    Generate content using the official google.generativeai SDK.
     """
-    if not GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not set in environment (.env).")
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-
-    # Google expects the 'contents.parts' body
-    body = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        # Optionally you can set temperature, maxOutputTokens etc:
-        # "temperature": 0.0,
-        # "maxOutputTokens": 512
-    }
-
-    headers = {"Content-Type": "application/json"}
-
+    _ensure_client()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        model = genai.GenerativeModel(GEMINI_MODEL)
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=512,
+            )
+        )
+        return response.text
+    except Exception as e:
+        raise RuntimeError(f"Gemini API SDK Error: {e}") from e
 
-            # Try common response shapes:
-            # 1) data["candidates"][0]["content"]
-            if isinstance(data, dict):
-                cand = data.get("candidates") or data.get("outputs") or data.get("output", {}).get("candidates")
-                if cand and isinstance(cand, list) and len(cand) > 0:
-                    first = cand[0]
-                    # candidate may have 'content', 'text', or nested fields
-                    text = first.get("content") or first.get("text") or first.get("output")
-                    if text:
-                        return text if isinstance(text, str) else json.dumps(text)
-
-                # 2) data["output"]["text"]
-                out_text = None
-                if "output" in data and isinstance(data["output"], dict):
-                    out_text = data["output"].get("text")
-                if out_text:
-                    return out_text
-
-                # 3) data.get("text") or generic fallback
-                if "text" in data and isinstance(data["text"], str):
-                    return data["text"]
-
-            # Final fallback: return the whole JSON string so caller can inspect
-            return json.dumps(data)
-
-    except httpx.HTTPStatusError as e:
-        # Include server response body in error for debugging
-        body_text = e.response.text if e.response is not None else "<no body>"
-        raise RuntimeError(f"Gemini API HTTP {e.response.status_code}: {body_text}") from e
-    except httpx.RequestError as e:
-        raise RuntimeError(f"Network error when contacting Gemini REST API: {e}") from e
-
-# ---------------- public generate_and_verify ----------------
-# inside sloka_generator/generator.py - replace existing generate_and_verify with this
 
 async def generate_and_verify(chandas_name: str, context: str, language: str="devanagari", max_attempts: int=DEFAULT_MAX_ATTEMPTS) -> Dict[str, Any]:
     """
@@ -231,8 +150,7 @@ async def generate_and_verify(chandas_name: str, context: str, language: str="de
         extra_instructions = f"Canonical LG pattern (for guidance): {pat}"
 
     attempts = []
-    ACCEPT_NEAR_THRESHOLD = float(os.getenv("ACCEPT_NEAR_THRESHOLD", "0.62"))  # soft accept threshold (optional)
-    # deterministic guidance
+    ACCEPT_NEAR_THRESHOLD = float(os.getenv("ACCEPT_NEAR_THRESHOLD", "0.62")) 
     gen_opts = {
         "temperature": 0.0,
         "maxOutputTokens": 512,
@@ -242,33 +160,31 @@ async def generate_and_verify(chandas_name: str, context: str, language: str="de
     for attempt in range(1, max_attempts+1):
         logger.info("Generation attempt %d/%d for chandas=%s", attempt, max_attempts, chandas_name)
 
-        # build a progressively stricter prompt if previous attempts failed
         prompt = build_prompt(chandas_name, context, language, extra_instructions)
-        # If not first attempt, add stricter instruction
+
         if attempt > 1:
             prompt += "\nNOTE: Previous attempt did not match the meter. THIS TIME strictly follow the meter exactly and output NOTHING but the required fenced blocks."
 
-        # call the low-level generator
         try:
-            # prefer SDK wrapper which used httpx. Use deterministic params if supported.
+
             gen_text = await _generate_with_sdk_async(prompt)
         except Exception as e:
             logger.error("Generation failed (API): %s", e)
             return {"success": False, "error": f"Generation failed: {e}", "attempts": attempts}
 
-        # normalize gen_text to str
         if not isinstance(gen_text, str):
             gen_text = str(gen_text)
 
         logger.debug("Raw generated text (first 1000 chars): %s", gen_text[:1000])
 
-        # parse shloka + meta
+
+
         parsed = extract_shloka_and_meta(gen_text)
         shloka_text = parsed.get("shloka", "").strip()
         meta = parsed.get("meta", "")
         logger.info("Parsed shloka (len=%d) meta len=%d", len(shloka_text), len(meta))
 
-        # If extractor failed to find a clean shloka, log and retry (unless last attempt)
+
         if not shloka_text:
             attempts.append({
                 "attempt": attempt,
@@ -294,18 +210,15 @@ async def generate_and_verify(chandas_name: str, context: str, language: str="de
         }
         attempts.append(attempt_record)
 
-        # Check match - allow slight softness via ACCEPT_NEAR_THRESHOLD
         identified = (match.get("identifiedChandas") or "").lower()
         similarity = float(match.get("similarity") or 0.0)
 
-        # Success criteria:
         ok = False
         if identified and identified.startswith(chandas_name.lower()):
             ok = True
         elif similarity >= float(os.getenv("SIMILARITY_THRESHOLD", "0.7")):
             ok = True
         elif similarity >= ACCEPT_NEAR_THRESHOLD:
-            # soft accept near matches (you can log / review later)
             ok = True
             logger.info("Soft-accepting near-match: %s (sim=%.3f)", match.get("matchedPattern"), similarity)
 
@@ -313,9 +226,7 @@ async def generate_and_verify(chandas_name: str, context: str, language: str="de
             logger.info("Generation SUCCESS on attempt %d: identified=%s similarity=%.3f", attempt, match.get("identifiedChandas"), similarity)
             return {"success": True, "attempts": attempts, "final": attempt_record}
 
-        # Otherwise tighten instructions and retry (loop continues)
         logger.info("Attempt %d did not pass verification: identified=%s similarity=%.3f", attempt, match.get("identifiedChandas"), similarity)
 
-    # After all attempts, return failure plus all attempts for debugging
     logger.warning("Generation failed after %d attempts. Returning attempts payload.", max_attempts)
     return {"success": False, "attempts": attempts, "final": attempts[-1] if attempts else None}

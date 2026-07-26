@@ -1,4 +1,3 @@
-# backend/chandas_analyser/syllabifier.py
 import re
 import logging
 from typing import List
@@ -8,12 +7,15 @@ from indic_transliteration.sanscript import transliterate
 logger = logging.getLogger("chandas_analyser.syllabifier")
 
 DIPHTHONGS = ("ai", "au")
-LONG_VOWELS = ("ā", "ī", "ū", "ṝ")
-SIMPLE_VOWELS = ("a", "i", "u", "e", "o", "ṛ", "ḷ")
-SPECIALS = ("ṃ", "ṁ", "ḥ")
+# In Sanskrit prosody, e and o are always Guru (heavy/long)
+LONG_VOWELS = ("ā", "ī", "ū", "ṝ", "ḹ", "e", "o")
+SIMPLE_VOWELS = ("a", "i", "u", "ṛ", "ḷ")
+# Include chandrabindu (m̐) alongside anusvara and visarga
+SPECIALS = ("ṃ", "ṁ", "ḥ", "m̐")
 ALL_VOWELS = DIPHTHONGS + LONG_VOWELS + SIMPLE_VOWELS + SPECIALS
 
-_non_vowel_chars_re = re.compile(r"[^a-zāīūṛṝḷṃṁḥ]")
+# Retain only valid IAST characters (letters, diacritics). Removes punctuation/symbols.
+_valid_iast_chars_re = re.compile(r"[^a-zāīūṛṝḷḹṃṁḥm̐]")
 
 def to_iast(text: str) -> str:
     if re.search(r"[\u0900-\u097F]", text):
@@ -33,13 +35,14 @@ def to_devanagari(text: str) -> str:
         return text
 
 def get_lg_pattern(shloka: str) -> List[str]:
+    # Split by standard Sanskrit punctuation or newlines
     padas = [p.strip() for p in re.split(r"[|।॥\n]+", shloka) if p.strip()]
     patterns: List[str] = []
 
     for pada in padas:
         iast = to_iast(pada)
         iast = re.sub(r"[.\d\s]+", "", iast)
-        iast = _non_vowel_chars_re.sub("", iast)
+        iast = _valid_iast_chars_re.sub("", iast)
 
         pattern = ""
         i = 0

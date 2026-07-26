@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  backend:
+    build: 
+      context: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+    env_file:
+      - ./backend/.env
+
+  frontend:
+    build: 
+      context: ./veda-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_BASE_URL=http://localhost:3000
+    depends_on:
+      - backend
