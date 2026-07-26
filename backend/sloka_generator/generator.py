@@ -60,15 +60,10 @@ Produce EXACTLY one śloka in {language} that satisfies the following constraint
    - Laghu (L): Short vowels (a, i, u, ṛ, ḷ) not followed by a conjunct consonant.
    - Guru (G): Long vowels (ā, ī, ū, ṝ, e, ai, o, au) OR short vowels followed by anusvara (ṃ/ṁ), visarga (ḥ), or a conjunct consonant.
    - You MUST follow the exact syllable count and L/G pattern for this meter.
-4) Formatting: Output ONLY the exact blocks below — no extra markdown, no introduction, no conversational text.
-
----BEGIN_SHLOKA---
-<the shloka lines>
----END_SHLOKA---
----META---
-syllable_pattern: <LG pattern per pada separated by |>
-explanation: <one-line justification>
----END_META---
+4) Formatting: You MUST output ONLY valid JSON matching the exact schema requested by the API. Do not output any markdown formatting, no introduction, and no chain of thought. 
+The JSON must contain two keys:
+- "shloka_lines": An array of strings containing the 4 lines of the Shloka.
+- "lg_pattern": A single string containing the LG pattern for each line separated by |.
 
 {extra_instructions or ""}
 """
@@ -76,41 +71,27 @@ explanation: <one-line justification>
 
 DEVANAGARI_RE = re.compile(r"[\u0900-\u097F\s।॥,०-९\-\.\'\"\!\?\(\)]+", re.U)
 
-def extract_shloka_and_meta(generated_text: str) -> Dict[str, str]:
-    txt = generated_text
-    try:
-        if isinstance(generated_text, str):
-            st = generated_text.strip()
-            if st.startswith("{") or st.startswith("["):
-                parsed = json.loads(st)
-                if isinstance(parsed, dict) and "parts" in parsed and parsed["parts"]:
-                    txt = parsed["parts"][0].get("text", txt)
-    except Exception:
-        pass
-
+def extract_shloka_and_meta(txt: str) -> Dict[str, str]:
+    """
+    Extracts the JSON from the model output.
+    Returns (shloka_string, meta_string)
+    """
     shloka = ""
     meta = ""
-
-    # Robust matching for ---BEGIN_SHLOKA--- ignoring markdown bolding and spaces
-    m = re.search(r"\**-{2,}BEGIN_SHLOKA-{2,}\**(.*?)\**-{2,}END_SHLOKA-{2,}\**", txt, re.S | re.IGNORECASE)
-    if m:
-        shloka = m.group(1).strip()
-    else:
-        # Fallback 1: Extract pure Devanagari block (now tolerates punctuation)
-        blocks = DEVANAGARI_RE.findall(txt)
-        blocks = [b.strip() for b in blocks if len(b.strip()) > 8]
-        if blocks:
-            shloka = max(blocks, key=len)
-        else:
-            # Fallback 2: Grab text that actually looks like poetry (4 lines) and isn't purely english metadata
-            lines = [ln.strip() for ln in txt.splitlines() if ln.strip() and not ln.strip().startswith("*") and not ln.strip().startswith("Name:") and not ln.strip().startswith("Target:")]
-            shloka = "\n".join(lines[:4])
-
-    m2 = re.search(r"\**-{2,}META-{2,}\**(.*?)\**-{2,}END_META-{2,}\**", txt, re.S | re.IGNORECASE)
-    if m2:
-        meta = m2.group(1).strip()
-
-    return {"shloka": shloka, "meta": meta, "raw": generated_text}
+    try:
+        data = json.loads(txt)
+        lines = data.get("shloka_lines", [])
+        shloka = "\n".join(lines)
+        meta = data.get("lg_pattern", "")
+    except Exception:
+        # Fallback for when the model's output gets cut off due to the hard token limit
+        # Find everything between quotes that contains devanagari
+        import re
+        matches = re.findall(r'"([^"\\]*[\u0900-\u097F][^"\\]*)(?:"|$)', txt)
+        if matches:
+            shloka = "\n".join(matches)
+        
+    return {"shloka": shloka, "meta": meta, "raw": txt}
 
 async def _generate_with_sdk_async(prompt: str) -> str:
     """
@@ -124,8 +105,23 @@ async def _generate_with_sdk_async(prompt: str) -> str:
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0,
-                max_output_tokens=512,
-                system_instruction="You are a strict Sanskrit prosody API. You MUST output ONLY the requested ---BEGIN_SHLOKA--- and ---META--- blocks. Do NOT output any conversational text, introductions, or vocabularies."
+                max_output_tokens=2048,
+                response_mime_type="application/json",
+                response_schema={
+                    "type": "OBJECT",
+                    "properties": {
+                        "shloka_lines": {
+                            "type": "ARRAY",
+                            "items": {"type": "STRING"},
+                            "description": "Exactly 4 lines of the Shloka in Devanagari. No explanations."
+                        },
+                        "lg_pattern": {
+                            "type": "STRING",
+                            "description": "The LG pattern, e.g. GGLGLLLGLLGLGG"
+                        }
+                    },
+                    "required": ["shloka_lines", "lg_pattern"]
+                }
             )
         )
         return response.text
@@ -216,15 +212,23 @@ async def generate_and_verify(chandas_name: str, context: str, language: str="de
 
         identified = (match.get("identifiedChandas") or "").lower()
         similarity = float(match.get("similarity") or 0.0)
-
+        
         ok = False
-        if identified and identified.startswith(chandas_name.lower()):
-            ok = True
-        elif similarity >= float(os.getenv("SIMILARITY_THRESHOLD", "0.7")):
-            ok = True
-        elif similarity >= ACCEPT_NEAR_THRESHOLD:
-            ok = True
-            logger.info("Soft-accepting near-match: %s (sim=%.3f)", match.get("matchedPattern"), similarity)
+        if identified.startswith(chandas_name.lower()):
+            if similarity >= 0.8:
+                ok = True
+                logger.info("Accepted exact meter match: %s (sim=%.3f)", match.get("matchedPattern"), similarity)
+            elif similarity >= ACCEPT_NEAR_THRESHOLD:
+                ok = True
+                logger.info("Soft-accepting near-match for requested meter: %s (sim=%.3f)", match.get("matchedPattern"), similarity)
+        else:
+            # If it identified a totally different meter, it means it failed the prompt. 
+            # We ONLY accept it if it's extremely similar to the canonical pattern anyway (maybe aliases)
+            if similarity >= 0.95:
+                ok = True
+                logger.info("Accepting alias meter: %s (sim=%.3f)", identified, similarity)
+            else:
+                logger.info("Rejecting: Identified %s (sim=%.3f) but requested %s", identified, similarity, chandas_name)
 
         if ok:
             logger.info("Generation SUCCESS on attempt %d: identified=%s similarity=%.3f", attempt, match.get("identifiedChandas"), similarity)

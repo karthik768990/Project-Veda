@@ -102,11 +102,16 @@ async def get_all_chandas():
     return JSONResponse({"success": True, "message": "Fetched all Chandas successfully ✅", "data": chs})
 
 
+MAX_SHLOKA_LENGTH = 1000
+
 @app.post("/chandas/analyze")
 async def analyze_chandas(payload: ShlokaIn):
     shloka = payload.shloka
     if not shloka:
         raise HTTPException(status_code=400, detail="Missing shloka text")
+    
+    if len(shloka) > MAX_SHLOKA_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Shloka length exceeds the maximum limit of {MAX_SHLOKA_LENGTH} characters")
 
     try:
         is_devanagari = bool(re.search(r"[\u0900-\u097F]", shloka))

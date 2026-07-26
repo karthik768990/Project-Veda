@@ -89,18 +89,17 @@ def find_match_in_db(lg_patterns: List[str], db_chandas: List[Dict[str, Any]]) -
         if len(db_padas) == num_padas:
             # same count — align 1:1
             for i in range(num_padas):
-                per_pada_db.append(_pad_or_truncate(db_padas[i], input_lengths[i]))
+                per_pada_db.append(db_padas[i])
         elif len(db_padas) > 1 and len(db_padas) != num_padas:
-
             rep = ceil(num_padas / len(db_padas))
             seq = (db_padas * rep)[:num_padas]
             for i, dp in enumerate(seq):
-                per_pada_db.append(_pad_or_truncate(dp, input_lengths[i]))
+                per_pada_db.append(dp)
         else:
-            # db_padas has single base pattern (or fewer) — repeat/truncate to each input pada length
+            # db_padas has single base pattern — repeat for each input pada
             base = db_padas[0]
             for i in range(num_padas):
-                per_pada_db.append(_pad_or_truncate(base, input_lengths[i]))
+                per_pada_db.append(base)
 
         # compute per-pada similarities
         total_sim = 0.0
