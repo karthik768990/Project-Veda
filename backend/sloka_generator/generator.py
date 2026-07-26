@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
 try:
-    import google.generativeai as genai
+    from google import genai
     _HAS_GENAI = True
 except Exception:
     genai = None
@@ -27,7 +27,7 @@ except Exception:
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
 DEFAULT_MAX_ATTEMPTS = 5
 TIMEOUT = 30.0
@@ -35,19 +35,18 @@ TIMEOUT = 30.0
 logger = logging.getLogger("sloka_generator")
 logging.basicConfig(level=logging.INFO)
 
-_client_initialized = False
+_client = None
 
 def _ensure_client():
-    global _client_initialized
+    global _client
     if not _HAS_GENAI:
-        raise RuntimeError("google.generativeai SDK is not installed.")
-    if not _client_initialized:
+        raise RuntimeError("google-genai SDK is not installed.")
+    if _client is None:
         if not GEMINI_API_KEY:
             logger.warning("GEMINI_API_KEY not set; generator will fail until set.")
             raise RuntimeError("GEMINI_API_KEY is not set.")
-        genai.configure(api_key=GEMINI_API_KEY)
-        logger.info("Configured google.generativeai SDK globally.")
-        _client_initialized = True
+        _client = genai.Client(api_key=GEMINI_API_KEY)
+        logger.info("Configured google.genai SDK globally.")
 
 def build_prompt(chandas_name: str, context: str, language: str="devanagari", extra_instructions: Optional[str]=None) -> str:
     lang_note = "Output must be in Devanagari." if language == "devanagari" else "Output must be in IAST (Latin)."
