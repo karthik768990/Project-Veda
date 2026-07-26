@@ -111,6 +111,7 @@ def find_match_in_db(lg_patterns: List[str], db_chandas: List[Dict[str, Any]]) -
             # if both empty -> perfect match
             if len(inp) == 0 and len(dbp) == 0:
                 sim = 1.0
+                dist = 0
             else:
                 dist = levenshtein(inp, dbp)
                 # length penalty for structural mismatch
